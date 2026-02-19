@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduVerse AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+<div id="shell">
+
+<!-- ── TOPBAR ──────────────────────────────────────────── -->
+<header id="topbar">
+  <div class="brand">
+    <div class="brand-icon">🎓</div>
+    <span class="brand-name">EduVerse AI</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on"  onclick="showPanel('chat',this)">💬 Chat</button>
+    <button class="tab"     onclick="showPanel('admin',this)">📁 Upload</button>
+  </div>
+
+  <div id="status-pill" style="margin-left:auto">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+</header>
+
+<!-- ── LEFT SIDEBAR ────────────────────────────────────── -->
+<aside id="sidebar">
+
+  <!-- spacer pushes content to vertical center -->
+  <div style="flex:1"></div>
+
+  <div class="sb-section">
+    <div class="sb-label">Ask About</div>
+
+    <!-- Anything: auto-sends (no specific entity needed) -->
+    <div class="sb-item on" onclick="prefill('')">
+      <span class="sb-icon">💬</span> Anything
+    </div>
+
+    <!-- Timetables: prefills prompt, waits for teacher name/UID -->
+    <div class="sb-item" onclick="prefill('Show timetable for ', 'Enter teacher name or UID (e.g. Dr. Manik or 23538)...')">
+      <span class="sb-icon">📅</span> Timetables
+    </div>
+
+    <!-- Attendance: auto-sends (no specific entity needed) -->
+    <div class="sb-item" onclick="prefill('What is the minimum attendance requirement and rules?')">
+      <span class="sb-icon">✅</span> Attendance
+    </div>
+
+    <!-- Policies: prefills, waits for topic -->
+    <div class="sb-item" onclick="prefill('Explain the policy about ', 'Which policy? e.g. exam eligibility, fee refund, detention...')">
+      <span class="sb-icon">📋</span> Policies
+    </div>
+
+    <!-- Notices: auto-sends -->
+    <div class="sb-item" onclick="prefill('What are the latest notices or circulars?')">
+      <span class="sb-icon">📢</span> Notices
+    </div>
+
+    <!-- Scholarships: prefills, waits for state/category -->
+    <div class="sb-item" onclick="prefill('Tell me about scholarship for ', 'Which state or category? e.g. Punjab SC, OBC, Jharkhand...')">
+      <span class="sb-icon">🎓</span> Scholarships
+    </div>
+  </div>
+
+  <div class="sb-div"></div>
+
+  <div class="sb-section" style="padding-bottom:16px">
+    <div class="sb-label">Indexed Docs</div>
+    <div id="sb-count" style="font-size:12px;color:var(--muted2);padding:0 6px">—</div>
+  </div>
+
+  <!-- spacer mirrors top -->
+  <div style="flex:1"></div>
+
+</aside>
+
+<!-- ── MAIN ─────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- CHAT PANEL -->
+  <div id="chat-panel">
+    <div id="messages">
+      <div id="welcome">
+        <div class="welcome-orb">🎓</div>
+        <div class="welcome-h">EduVerse AI</div>
+        <p class="welcome-p">Ask anything about timetables, attendance rules, academic policies, or any uploaded university document.</p>
+        <div class="caps">
+          <div class="cap" onclick="prefill('Show timetable for ', 'Enter teacher name or UID (e.g., Dr. Manik or 23538)...')">
+            <div class="cap-ico">📅</div>
+            <div class="cap-title">Faculty Timetables</div>
+            <div class="cap-desc">Schedules, rooms, sections</div>
+          </div>
+          <div class="cap" onclick="qa('What is the minimum attendance requirement?')">
+            <div class="cap-ico">✅</div>
+            <div class="cap-title">Attendance Rules</div>
+            <div class="cap-desc">Thresholds, condonation</div>
+          </div>
+          <div class="cap" onclick="qa('What are the academic rules for exam eligibility?')">
+            <div class="cap-ico">📋</div>
+            <div class="cap-title">Academic Policies</div>
+            <div class="cap-desc">Grades, ETE eligibility</div>
+          </div>
+          <div class="cap" onclick="qa('What is the late registration attendance policy?')">
+            <div class="cap-ico">🕐</div>
+            <div class="cap-title">Late Registration</div>
+            <div class="cap-desc">Freshmen, continuing students</div>
+          </div>
+          <div class="cap" onclick="qa('What courses does Dr. Manik teach?')">
+            <div class="cap-ico">👨‍🏫</div>
+            <div class="cap-title">Faculty Courses</div>
+            <div class="cap-desc">Who teaches what, where</div>
+          </div>
+          <div class="cap" onclick="qa('What happens if a student is detained?')">
+            <div class="cap-ico">⚠️</div>
+            <div class="cap-title">Detention Rules</div>
+            <div class="cap-desc">F grades, ETE ban</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <div class="input-box">
+        <textarea id="msg-inp" rows="1" placeholder="Ask anything about timetables, attendance, policies..."></textarea>
+        <button id="send" onclick="send()">➤</button>
+      </div>
+      <div class="input-hint">
+        <span>Enter to send &nbsp;·&nbsp; Shift+Enter for new line</span>
+        <span id="hit-info" style="color:var(--muted2)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="admin-panel" class="hide">
+    <div class="page-title">Document Upload</div>
+    <p class="page-sub">Upload any university document. It will be automatically parsed, chunked, and stored in the local vector database so the AI can answer questions about it.</p>
+
+    <div id="drop-zone"
+         onclick="document.getElementById('file-inp').click()"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave()"
+         ondrop="onDrop(event)">
+      <div class="dz-ico">📂</div>
+      <div class="dz-title" id="dz-title">Drop files here or click to browse</div>
+      <div class="dz-sub" id="dz-sub">Faculty timetables, academic rules, notices, circulars</div>
+      <div class="dz-fmt">PDF · XLSX · XLS · CSV · TXT</div>
+    </div>
+    <input type="file" id="file-inp" multiple
+           accept=".pdf,.xlsx,.xls,.csv,.txt,.docx"
+           onchange="onFileSelect(event)" />
+
+    <div class="form-row">
+      <div class="f-group">
+        <label class="f-label">Document Type</label>
+        <select class="f-sel" id="doc-type">
+          <option value="auto">Auto Detect</option>
+          <option value="timetable">Timetable (XLSX)</option>
+          <option value="policy">Policy / Rules (PDF)</option>
+          <option value="notice">Notice / Circular</option>
+          <option value="general">General</option>
+        </select>
+      </div>
+      <div class="f-group">
+        <label class="f-label">Label (optional)</label>
+        <input type="text" class="f-inp" id="doc-label" placeholder="e.g. Spring 2025 Timetable"/>
+      </div>
+    </div>
+
+    <button class="upload-btn" id="upload-btn" onclick="doUpload()" disabled>
+      Upload &amp; Index Document
+    </button>
+
+    <div id="prog">
+      <div class="pbar"><div class="pfill" id="pfill"></div></div>
+      <div class="ptext" id="ptext">Processing...</div>
+    </div>
+
+    <div class="list-header">
+      <div class="list-title">📚 Indexed Documents</div>
+      <button class="rebuild-btn" onclick="toast('Rebuild: delete all files then re-upload','')">🔄 Rebuild</button>
+    </div>
+    <div id="file-list"><div id="no-files">No documents yet. Upload your first file above.</div></div>
+  </div>
+
+</div><!-- #main -->
+
+<!-- ── RIGHT PANEL ─────────────────────────────────────── -->
+<aside id="rpanel">
+  <div>
+    <div class="rp-title">Session</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val" id="s-msgs">0</div><div class="stat-lbl">Messages</div></div>
+      <div class="stat-box"><div class="stat-val" id="s-docs">0</div><div class="stat-lbl">Docs</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="rp-title">Last Query</div>
+    <div class="info-row"><span class="info-k">Hits found</span><span class="info-v" id="q-hits">—</span></div>
+    <div class="info-row"><span class="info-k">Response time</span><span class="info-v" id="q-ms">—</span></div>
+    <div class="info-row"><span class="info-k">Sources</span><span class="info-v" id="q-src">—</span></div>
+  </div>
+
+  <div>
+    <div class="rp-title">Knowledge Base</div>
+    <div id="col-view"><div style="font-size:12px;color:var(--muted2)">Loading...</div></div>
+  </div>
+
+  <div>
+    <div class="rp-title">System</div>
+    <div class="info-row"><span class="info-k">Model</span><span class="info-v" id="sys-model">—</span></div>
+    <div class="info-row"><span class="info-k">Ollama</span><span class="info-v" id="sys-ollama">—</span></div>
+    <div class="info-row"><span class="info-k">Total chunks</span><span class="info-v" id="sys-chunks">—</span></div>
+  </div>
+</aside>
+
+</div><!-- #shell -->
+<div id="toast"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

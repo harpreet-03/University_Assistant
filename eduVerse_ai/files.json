@@ -1,0 +1,23 @@
+[
+  {
+    "filename": "Academic rules.pdf",
+    "doc_type": "policy",
+    "chunks": 6,
+    "size_kb": 236.3,
+    "storage": "vector"
+  },
+  {
+    "filename": "all_timetables.xlsx",
+    "doc_type": "timetable",
+    "chunks": 381,
+    "size_kb": 21.3,
+    "storage": "sql"
+  },
+  {
+    "filename": "Code of conduct-student.pdf",
+    "doc_type": "general",
+    "chunks": 1,
+    "size_kb": 81.3,
+    "storage": "vector"
+  }
+]

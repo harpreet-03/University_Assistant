@@ -1,0 +1,12 @@
+
+__pycache__/
+*.pyc
+.DS_Store
+.env
+venv/
+.venv/
+env/
+db/*.sqlite3
+db/*.db
+db_backup/
+uploads/
