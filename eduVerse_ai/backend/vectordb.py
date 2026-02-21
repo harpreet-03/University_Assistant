@@ -8,6 +8,7 @@ Collections:
   policies    → PDF/DOCX rules, regulations, scholarships
   notices     → Circulars, announcements
   general     → CSV, TXT, anything else
+  seatings of faculties - XLSX files
 
 WHY per-collection thresholds:
   all-MiniLM-L6-v2 scores SHORT structured chunks (timetables) lower

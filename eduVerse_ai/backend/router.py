@@ -27,10 +27,15 @@ import vectordb
 
 _TIMETABLE_SIGNALS = {
     "timetable", "schedule", "class", "classes", "lecture", "lectures",
-    "room", "timing", "timings", "time", "slot", "when does", "when is",
+    "timing", "timings", "time", "slot", "when does", "when is",
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
     "teaches", "teaching", "taught", "section", "what time",
     "morning", "afternoon", "evening",
+}
+
+_LOCATION_SIGNALS = {
+    "where", "location", "block", "room", "cabin", "chamber", "seating",
+    "which block", "which room", "office", "seat", "allocated",
 }
 
 _STUDENT_SIGNALS = {
@@ -101,7 +106,10 @@ def classify_intent(query):
     if tt_score >= 1 and pol_score >= 2:
         return "hybrid"
 
-    scores = {"timetable": tt_score, "student": stu_score, "policy": pol_score}
+    # Check location signals
+    loc_score = len(tokens & _LOCATION_SIGNALS)
+    
+    scores = {"timetable": tt_score, "student": stu_score, "policy": pol_score, "location": loc_score}
     dominant = max(scores, key=scores.get)
 
     if scores[dominant] == 0:
@@ -141,6 +149,9 @@ def route(query):
 
     if intent == "student":
         return _route_sql_student(query)
+    
+    if intent == "location":
+        return _route_sql_location(query)
 
     if intent == "hybrid":
         return _route_hybrid(query)
@@ -204,6 +215,29 @@ def _route_sql_student(query):
 # ═══════════════════════════════════════════════════════════════
 #  Vector routing
 # ═══════════════════════════════════════════════════════════════
+
+def _route_sql_location(query):
+    result = sqldb.query_faculty_location(query)
+
+    if result:
+        return {
+            "context": f"[SQL Database — Faculty Locations]\n\n{result}",
+            "intent":  "location",
+            "sources": ["faculty_location_db"],
+            "hits":    1,
+            "method":  "sql",
+        }
+
+    # SQL found nothing → fallback to vector
+    hits = vectordb.search(query, top_k=4)
+    return {
+        "context":  _build_vector_context(hits),
+        "intent":   "location",
+        "sources":  list({h["source"] for h in hits}),
+        "hits":     len(hits),
+        "method":   "vector_fallback",
+    }
+
 
 def _route_vector(query):
     hits = vectordb.search(query, top_k=6)

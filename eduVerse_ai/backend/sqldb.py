@@ -66,6 +66,21 @@ def init():
                 semester    TEXT,
                 source_file TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS faculty_allocation (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                faculty_id     TEXT,
+                faculty_name   TEXT,
+                designation    TEXT,
+                domain         TEXT,
+                parent_domain  TEXT,
+                school         TEXT,
+                remarks        TEXT,
+                block          TEXT,
+                room           TEXT,
+                cabin          TEXT,
+                source_file    TEXT
+            );
         """)
         # Indexes for fast lookup
         con.executescript("""
@@ -75,6 +90,9 @@ def init():
             CREATE INDEX IF NOT EXISTS idx_tt_fid      ON timetable(faculty_id);
             CREATE INDEX IF NOT EXISTS idx_st_reg      ON students(reg_no);
             CREATE INDEX IF NOT EXISTS idx_st_name     ON students(name);
+            CREATE INDEX IF NOT EXISTS idx_fa_fid      ON faculty_allocation(faculty_id);
+            CREATE INDEX IF NOT EXISTS idx_fa_fname    ON faculty_allocation(faculty_name);
+            CREATE INDEX IF NOT EXISTS idx_fa_block    ON faculty_allocation(block);
         """)
 
 
@@ -123,6 +141,7 @@ def delete_by_source(source_file):
     with _conn() as con:
         con.execute("DELETE FROM timetable WHERE source_file = ?", (source_file,))
         con.execute("DELETE FROM students  WHERE source_file = ?", (source_file,))
+        con.execute("DELETE FROM faculty_allocation WHERE source_file = ?", (source_file,))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -527,6 +546,164 @@ def stats():
             tt  = con.execute("SELECT COUNT(*) FROM timetable").fetchone()[0]
             stu = con.execute("SELECT COUNT(*) FROM students").fetchone()[0]
             fac = con.execute("SELECT COUNT(DISTINCT faculty_name) FROM timetable").fetchone()[0]
-        return {"timetable_rows": tt, "student_rows": stu, "faculty_count": fac}
+            loc = con.execute("SELECT COUNT(*) FROM faculty_allocation").fetchone()[0]
+        return {"timetable_rows": tt, "student_rows": stu, "faculty_count": fac, "location_rows": loc}
     except Exception:
-        return {"timetable_rows": 0, "student_rows": 0, "faculty_count": 0}
+        return {"timetable_rows": 0, "student_rows": 0, "faculty_count": 0, "location_rows": 0}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Insert faculty allocation rows
+# ═══════════════════════════════════════════════════════════════
+
+def insert_faculty_allocation(rows, source_file):
+    """
+    rows: list of dicts with faculty allocation data
+    Deletes existing rows from this source first (safe re-upload).
+    """
+    init()
+    with _conn() as con:
+        con.execute("DELETE FROM faculty_allocation WHERE source_file = ?", (source_file,))
+        con.executemany("""
+            INSERT INTO faculty_allocation
+              (faculty_id, faculty_name, designation, domain, parent_domain,
+               school, remarks, block, room, cabin, source_file)
+            VALUES
+              (:faculty_id, :faculty_name, :designation, :domain, :parent_domain,
+               :school, :remarks, :block, :room, :cabin, :source_file)
+        """, [{**r, "source_file": source_file} for r in rows])
+    return len(rows)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Query: faculty allocation (location/seating)
+# ═══════════════════════════════════════════════════════════════
+
+def query_faculty_location(query):
+    """
+    Query faculty seating/location information.
+    Examples:
+      - "where is Dr. Vikas Verma?"
+      - "which block is Madhuri in?"
+      - "show me faculty in block 25"
+      - "what is the room number of Manjinder Singh?"
+    """
+    init()
+    q = query.lower()
+    conditions, params = [], []
+    
+    # Faculty ID
+    fid_match = re.search(r'\b(\d{5})\b', query)
+    if fid_match:
+        conditions.append("faculty_id = ?")
+        params.append(fid_match.group(1))
+    
+    # Faculty name (fuzzy matching like timetable queries)
+    if not fid_match:
+        clean_q = re.sub(r'\b(dr|prof|mr|ms|mrs)\.?\s+', '', query, flags=re.I)
+        stop = {'where','is','the','show','me','tell','which','what','in','at',
+                'block','room','cabin','chamber','faculty','location','seating','find',
+                'can','i'}
+        
+        # Strategy 1: extract after keywords
+        m = re.search(
+            r'(?:where|location|room|block|cabin|find)\s+(?:is|of|for|can\s+i\s+find)?\s*'
+            r'([a-zA-Z][a-zA-Z\s]{2,40}?)'
+            r'(?:\s+in|\s+at|\s+block|\s+room|\s*\?|\s*$)',
+            clean_q, re.I
+        )
+        if m:
+            candidate = m.group(1).strip()
+            name_tokens = [w for w in candidate.split()
+                          if w.lower() not in stop and len(w) > 1]
+        else:
+            # Strategy 2: just grab capitalized words
+            name_tokens = [w for w in clean_q.split()
+                          if w and w[0].isupper() and w.lower() not in stop and len(w) > 2]
+        
+        if name_tokens:
+            name_conds = " OR ".join(["LOWER(faculty_name) LIKE ?" for _ in name_tokens])
+            conditions.append(f"({name_conds})")
+            params.extend([f"%{t.lower()}%" for t in name_tokens])
+    
+    # Block number
+    block_m = re.search(r'\bblock\s*(\d+)\b', q, re.I)
+    if block_m:
+        conditions.append("block = ?")
+        params.append(block_m.group(1))
+    
+    # Room number
+    room_m = re.search(r'\broom\s*(?:no\.?\s*)?(\d+)\b', q, re.I)
+    if room_m:
+        conditions.append("room = ?")
+        params.append(room_m.group(1))
+    
+    # Domain/Department
+    domain_keywords = {
+        'cloud': 'Cloud Computing',
+        'ai': 'Artificial Intelligence',
+        'ml': 'Machine Learning',
+        'cyber': 'Cyber Security',
+        'network': 'Network',
+        'programming': 'Programming',
+    }
+    for kw, domain in domain_keywords.items():
+        if kw in q:
+            conditions.append("(domain LIKE ? OR parent_domain LIKE ?)")
+            params.extend([f"%{domain}%", f"%{domain}%"])
+            break
+    
+    if not conditions:
+        return None
+    
+    sql = "SELECT * FROM faculty_allocation WHERE " + " AND ".join(conditions)
+    sql += " LIMIT 20"
+    
+    with _conn() as con:
+        rows = con.execute(sql, params).fetchall()
+    
+    if not rows:
+        return None
+    
+    return _format_allocation_results(rows)
+
+
+def _format_allocation_results(rows):
+    """Format faculty allocation results into readable text."""
+    if not rows:
+        return None
+    
+    if len(rows) == 1:
+        # Single faculty - detailed format
+        r = rows[0]
+        lines = [
+            f"📍 {r['faculty_name']} (ID: {r['faculty_id']})",
+            f"",
+            f"Designation: {r['designation'] or 'N/A'}",
+            f"Domain: {r['domain'] or 'N/A'}",
+            f"School: {r['school'] or 'N/A'}",
+            f"",
+            f"Location:",
+            f"  Block: {r['block'] or 'N/A'}",
+            f"  Room: {r['room'] or 'N/A'}",
+        ]
+        if r['cabin']:
+            lines.append(f"  Cabin: {r['cabin']}")
+        if r['remarks']:
+            lines.append(f"  Remarks: {r['remarks']}")
+        return "\n".join(lines)
+    
+    else:
+        # Multiple faculty - compact list
+        lines = [f"📍 Faculty Locations ({len(rows)} results):"]
+        lines.append("")
+        for r in rows:
+            location = f"Block {r['block']}" if r['block'] else "Location N/A"
+            if r['room']:
+                location += f", Room {r['room']}"
+            if r['cabin']:
+                location += f", {r['cabin']}"
+            lines.append(
+                f"  • {r['faculty_name']} ({r['faculty_id']}) — {location}"
+            )
+        return "\n".join(lines)

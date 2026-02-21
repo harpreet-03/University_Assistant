@@ -500,3 +500,76 @@ def parse_file(filepath):
         return parse_text(filepath)
     else:
         raise ValueError(f"Unsupported file type: '{ext}'. Supported: .xlsx, .pdf, .docx, .doc, .csv, .txt")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Faculty Allocation (seating/location data)
+# ═══════════════════════════════════════════════════════════════
+
+def parse_faculty_allocation_to_rows(filepath):
+    """
+    Parse faculty allocation xlsx (seating/location data).
+    Expected columns: UID, Name, Designation, CurrentDomain, ParentDomain, 
+                     School/Division, Remarks, Block, Room No., Cabin/Chamber
+    Returns list of dicts for SQL insertion into faculty_allocation table.
+    """
+    import openpyxl
+    ws = openpyxl.load_workbook(filepath).active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    
+    # Normalize headers
+    headers = [str(h).strip().lower().replace(' ', '_').replace('.', '').replace('/', '_') 
+               if h else f"col_{i}" for i, h in enumerate(rows[0])]
+    
+    # Find key columns flexibly
+    col_map = {}
+    for i, h in enumerate(headers):
+        if 'uid' in h:
+            col_map['uid'] = i
+        elif 'name' in h and 'uid' not in h:
+            col_map['name'] = i
+        elif 'designation' in h:
+            col_map['designation'] = i
+        elif 'currentdomain' in h or 'current_domain' in h:
+            col_map['domain'] = i
+        elif 'parentdomain' in h or 'parent_domain' in h:
+            col_map['parent_domain'] = i
+        elif 'school' in h or 'division' in h:
+            col_map['school'] = i
+        elif 'remark' in h:
+            col_map['remarks'] = i
+        elif 'block' in h and 'block' not in col_map:
+            col_map['block'] = i
+        elif 'room' in h and 'no' in h:
+            col_map['room'] = i
+        elif 'cabin' in h or 'chamber' in h:
+            col_map['cabin'] = i
+    
+    def get(row, key):
+        idx = col_map.get(key)
+        if idx is None or idx >= len(row):
+            return ""
+        val = row[idx]
+        return str(val).strip() if val is not None and str(val).strip().lower() != 'none' else ""
+    
+    result = []
+    for row in rows[1:]:
+        uid = get(row, 'uid')
+        name = get(row, 'name')
+        if not uid or not name:
+            continue
+        result.append({
+            'faculty_id': uid,
+            'faculty_name': name,
+            'designation': get(row, 'designation'),
+            'domain': get(row, 'domain'),
+            'parent_domain': get(row, 'parent_domain'),
+            'school': get(row, 'school'),
+            'remarks': get(row, 'remarks'),
+            'block': get(row, 'block'),
+            'room': get(row, 'room'),
+            'cabin': get(row, 'cabin'),
+        })
+    return result

@@ -102,13 +102,19 @@ async def upload(file: UploadFile = File(...), doc_type: str = Form("auto")):
     # ── XLSX → SQL (structured) ───────────────────────────────
     if ext in (".xlsx", ".xls"):
         try:
+            # Try timetable format first
             rows = parsers.parse_xlsx_to_rows(str(save_path))
             if rows:
                 count = sqldb.insert_timetable(rows, file.filename)
-                log.info(f"UPLOAD SQL   {file.filename}  rows={count}")
+                log.info(f"UPLOAD SQL   {file.filename}  rows={count} (timetable)")
             else:
-                # Flat format not detected — try CSV-style marks data
-                raise ValueError("Not flat timetable format")
+                # Try faculty allocation format
+                rows = parsers.parse_faculty_allocation_to_rows(str(save_path))
+                if rows:
+                    count = sqldb.insert_faculty_allocation(rows, file.filename)
+                    log.info(f"UPLOAD SQL   {file.filename}  rows={count} (allocation)")
+                else:
+                    raise ValueError("Not recognized timetable or allocation format")
         except Exception as e:
             # Fallback: parse as text chunks for vector DB
             log.warning(f"xlsx SQL insert failed ({e}), falling back to vector")
