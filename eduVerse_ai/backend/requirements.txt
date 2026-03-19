@@ -16,3 +16,9 @@ docx2txt==0.8
 chromadb==0.5.0
 sentence-transformers==3.0.1
 numpy<2.0.0
+
+# Authentication & Security
+bcrypt>=4.0.1
+python-jose[cryptography]>=3.3.0
+python-dotenv>=1.0.0
+passlib>=1.7.4
